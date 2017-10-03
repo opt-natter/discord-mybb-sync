@@ -1,7 +1,7 @@
 <?php
 /*
 Installation Steps:
-1. Copy the Files into the plugin folder from your MyBB installation. inc/...
+1. Copy the Files into the plugin and task folder from your MyBB installation. inc/...
 2. Download unirest (this plugin was tested with v3.0.4) and upload it to inc/plugins/Unirest
 https://github.com/Mashape/unirest-php
 3. Head over to https://discordapp.com/developers/applications/me#top to create a new App.
