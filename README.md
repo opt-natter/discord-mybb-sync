@@ -4,6 +4,7 @@ A MyBB Plugin to syncronise MyBB Groups with Discord Roles
 Installation Steps:
 1. Copy the Files into the plugin folder from your MyBB installation. inc/...
 2. Download unirest (this plugin was tested with v3.0.4) and upload it to inc/plugins/Unirest
+https://github.com/Mashape/unirest-php
 3. Head over to https://discordapp.com/developers/applications/me#top to create a new App.
 4. Create a Bot User and copy the Client ID from the App details and Token from the App Bot User
 5. Visit: https://discordapi.com/permissions.html#268435456. insert your Client ID and visit the Link
