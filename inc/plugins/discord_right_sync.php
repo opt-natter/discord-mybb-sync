@@ -1,5 +1,7 @@
 <?php
 /*
+MyBB plugin: Synchronising MyBB Groups with Discord Roles
+
 Installation Steps:
 1. Copy the Files into the plugin and task folder from your MyBB installation. inc/...
 2. Download unirest (this plugin was tested with v3.0.4) and upload it to inc/plugins/Unirest
