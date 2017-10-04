@@ -142,13 +142,13 @@ function discord_right_sync_uninstall()
 function discord_right_sync_activate()
     {
     global $mybb, $db, $plugins, $cache;
+    require_once MYBB_ROOT . '/inc/functions_task.php';
+        
     $taskExists = $db->simple_select('tasks', 'tid', 'file = \'discord_right_sync\'', array(
         'limit' => '1'
     ));
     if ($db->num_rows($taskExists) == 0)
         {
-        require_once MYBB_ROOT . '/inc/functions_task.php';
-
         $myTask = array(
             'title' => discord_right_sync_info() ['name'],
             'file' => 'discord_right_sync',
@@ -173,8 +173,6 @@ function discord_right_sync_activate()
         }
       else
         {
-        require_once MYBB_ROOT . '/inc/functions_task.php';
-
         $theTask = $db->fetch_array($db->simple_select('tasks', '*', 'file = \'discord_right_sync\'', 1));
         $db->update_query('tasks', array(
             'enabled' => 1,
@@ -208,7 +206,6 @@ function discord_right_sync_settings_update()
     if (discord_right_sync_get_setting_group_id() != $mybb->input['gid']) return;
 
     // update user Fild selection
-
     $select_user_field_str = '';
     $query = $db->simple_select('profilefields', 'fid,name');
     while ($profilefields = $db->fetch_array($query))
@@ -222,7 +219,6 @@ function discord_right_sync_settings_update()
     $discord_right_sync_settings_set = true;
 
     // check for auth token
-
     if (empty($mybb->settings['drs_setting_token']))
         {
         $discord_right_sync_settings_set = false;
@@ -233,7 +229,6 @@ function discord_right_sync_settings_update()
         }
 
     // check for guild id
-
     if (empty($mybb->settings['drs_setting_guild_id']))
         {
         $discord_right_sync_settings_set = false;
@@ -243,16 +238,15 @@ function discord_right_sync_settings_update()
         );
         }
 
+    //build the selection fields for each mybb group with the discord roles
     if ($discord_right_sync_settings_set)
         {
         $disporder = 10;
 
         // Read the usergroups cache
-
         $usergroups = $cache->read("usergroups");
 
         // If the groups cache doesn't exist, update it and re-read it
-
         if (!is_array($usergroups))
             {
             $cache->update_usergroups();
@@ -281,6 +275,7 @@ function discord_right_sync_settings_update()
             $db->insert_query('settings', $setting);
             }
 
+        //get the discord guild roles
         $response = discord_right_sync_querry_discord('guilds/' . $mybb->settings['drs_setting_guild_id'] . '/roles');
         
         if ($response->code == 200)
@@ -303,7 +298,7 @@ function discord_right_sync_settings_update()
             {
             $page->extra_messages[] = array(
                 'type' => 'error',
-                'message' => discord_right_sync_info() ['name'] . ': Could connect to Discord guild. (' . $response->body->message . ')'
+                'message' => discord_right_sync_info()['name'] . ': Could connect to Discord guild. (' . htmlspecialchars($response->body->message) . ')'
             );
             }
 
@@ -333,19 +328,27 @@ function discord_right_sync_roles($task = NULL)
     global $mybb, $db, $cache;
     require_once MYBB_ROOT . '/inc/functions_task.php';
     
-    if ($mybb->settings['drs_setting_ratelimit_reset'] > time()) return; //wait with new reqeust till the api rate limit resets
+    if ($mybb->settings['drs_setting_ratelimit_reset'] > time()) 
+        return; //wait with new reqeust till the api rate limit resets
+   
     $user_roles = array();
     $query = $db->query("
         SELECT `usergroup`,`additionalgroups`,`fid" . $db->escape_string($mybb->settings['drs_setting_user_fid']) . "`
         FROM `" . TABLE_PREFIX . "users` AS u
         INNER JOIN `" . TABLE_PREFIX . "userfields` AS uf ON (u.`uid`=uf.`ufid`)
         WHERE uf.`fid" . $db->escape_string($mybb->settings['drs_setting_user_fid']) . "` LIKE '%#____' ");
+    //get all mybb users with discord name field
     while ($user = $db->fetch_array($query))
         {
+        //join all user usergroups
         $usergroup_string = $user['usergroup'];
-        if (!empty($user['additionalgroups'])) $usergroup_string.= ',' . $user['additionalgroups'];
+        if (!empty($user['additionalgroups'])) 
+            $usergroup_string.= ',' . $user['additionalgroups'];
+        
         $usergroups = explode(',', $usergroup_string);
         $usergroups = array_diff($usergroups, array('') , array(' ')); //remove all empty elements
+        
+        
         $user_d_name = $user['fid' . $mybb->settings['drs_setting_user_fid']];
         if (isset($user_roles[$user_d_name])) //same Discord Name in multiple accounts => ignore accounts.
             {
@@ -356,11 +359,14 @@ function discord_right_sync_roles($task = NULL)
 
         foreach($usergroups as $mybb_gid)
             {
-            if (!empty($mybb->settings['drs_setting_gid' . $mybb_gid])) $user_roles[$user_d_name]['mybb_groups'][$mybb_gid] = $mybb->settings['drs_setting_gid' . $mybb_gid];
+            //add role to user if a discord role is selected for that group
+            if (!empty($mybb->settings['drs_setting_gid' . $mybb_gid])) 
+                $user_roles[$user_d_name]['mybb_groups'][$mybb_gid] = $mybb->settings['drs_setting_gid' . $mybb_gid];
             }
         }
-
     $query->free_result;
+    
+    //get all discord members with their roles
     $response = discord_right_sync_querry_discord('guilds/' . $mybb->settings['drs_setting_guild_id'] . '/members?limit=1000');
     foreach($response->body as $d_user_obj)
         {
@@ -370,53 +376,69 @@ function discord_right_sync_roles($task = NULL)
         $user_roles[$user_d_name]['d_roles'] = $d_user_obj->roles;
         $user_roles[$user_d_name]['d_id'] = $d_user_obj->user->id;
         }
-
     unset($response);
+    
+    
     $controlled_groups = array(); //controlled groups by mybb
 
     // Read the usergroups cache
-
     $usergroups = $cache->read("usergroups");
 
     // If the groups cache doesn't exist, update it and re-read it
-
     if (!is_array($usergroups))
         {
         $cache->update_usergroups();
         $usergroups = $cache->read("usergroups");
         }
 
+    //get all discord roles which are controlled by mybb
     foreach($usergroups as $usergroup)
         {
         $discord_role_id_from_mybb = $mybb->settings['drs_setting_gid' . $usergroup['gid']];
-        if (!empty($discord_role_id_from_mybb)) $controlled_groups[] = $discord_role_id_from_mybb;
+        if (!empty($discord_role_id_from_mybb)) 
+            $controlled_groups[] = $discord_role_id_from_mybb;
         }
 
     foreach($user_roles as $user_d_name => $data)
         {
-        if (empty($data['mybb_groups']) AND empty($data['d_roles'])) continue;
-        if (empty($data['d_id'])) continue;
+        if (empty($data['mybb_groups']) AND empty($data['d_roles'])) 
+            continue;
+            
+        if (empty($data['d_id'])) 
+            continue;
+            
         $add_role = array();
         $remove_role = array();
         $must_have_groups = array(); //roles which are assigned to the user by mybb
-        if (!empty($data['mybb_groups'])) $must_have_groups = array_merge($must_have_groups, $data['mybb_groups']);
+        if (!empty($data['mybb_groups'])) 
+            $must_have_groups = array_merge($must_have_groups, $data['mybb_groups']);
+            
         $complete_roles = $data['d_roles'];
         foreach($must_have_groups as $mybb_gid => $d_role_id)
             {
-            if (!in_array($d_role_id, $data['d_roles'])) array_push($add_role, $d_role_id);
+            if (!in_array($d_role_id, $data['d_roles'])) 
+                array_push($add_role, $d_role_id);
             }
 
         foreach($controlled_groups as $mybb_role_id)
             {
-            if (in_array($mybb_role_id, $data['d_roles']) AND !in_array($mybb_role_id, $must_have_groups)) array_push($remove_role, $mybb_role_id);
+            if (in_array($mybb_role_id, $data['d_roles']) AND !in_array($mybb_role_id, $must_have_groups)) 
+                array_push($remove_role, $mybb_role_id);
             }
 
+        //check if roles have changed
         if (!empty($add_role) OR !empty($remove_role))
             {
-            if (!empty($add_role)) $complete_roles = array_merge($complete_roles, $add_role);
-            if (!empty($remove_role)) $complete_roles = array_diff($complete_roles, $remove_role);
+            if (!empty($add_role)) 
+                $complete_roles = array_merge($complete_roles, $add_role);
+                
+            if (!empty($remove_role)) 
+                $complete_roles = array_diff($complete_roles, $remove_role);
+                
             $complete_roles = array_unique($complete_roles);
             $complete_roles = array_values($complete_roles);
+            
+            //build discord roles update request
             $headers = discord_right_sync_discord_header();
             $headers['Content-Type'] = 'application/json';
             $body = Unirest\Request\Body::json(array(
@@ -425,9 +447,7 @@ function discord_right_sync_roles($task = NULL)
             $response = Unirest\Request::patch('https://discordapp.com/api/guilds/' . $mybb->settings['drs_setting_guild_id'] . '/members/' . $data['d_id'], $headers, $body);
             if ($response->code == 204)
                 {
-
                 // success
-
                 }
 
             if (isset($response->headers['X-RateLimit-Reset'])) //update reset time
