@@ -61,6 +61,7 @@ if (defined('IN_ADMINCP')) {
 }
 $plugins->add_hook("usercp_do_profile_end", "discord_right_sync_user_profile"); //provide a check for die right discord id format
 define("DRS_DISCORD_ID_FORMAT", '.{1,32}#\d{4}'); //discord ID Format check NAME#0000
+
 function discord_right_sync_info()
 {
     return array(
@@ -75,6 +76,7 @@ function discord_right_sync_info()
         "compatibility" => "16*,18*"
     );
 }
+
 function discord_right_sync_install()
 {
     global $db, $mybb, $cache;
@@ -135,10 +137,12 @@ function discord_right_sync_install()
     //drs_setting_gid{MYBB_GROUP_ID} is created for each user group in discord_right_sync_settings_update()
     rebuild_settings();
 }
+
 function discord_right_sync_is_installed()
 {
     return !empty(discord_right_sync_get_setting_group_id());
 }
+
 function discord_right_sync_uninstall()
 {
     global $db;
@@ -147,6 +151,7 @@ function discord_right_sync_uninstall()
     $db->delete_query('tasks', "file = 'discord_right_sync'");
     rebuild_settings();
 }
+
 function discord_right_sync_activate()
     {
     global $mybb, $db, $plugins, $cache;   
@@ -213,6 +218,7 @@ function discord_right_sync_activate()
         rebuild_settings();      
     }   
 }
+
 function discord_right_sync_deactivate()
 {
     global $db;
@@ -221,6 +227,7 @@ function discord_right_sync_deactivate()
         'enabled' => 0
     ) , 'file = \'discord_right_sync\'');
 }
+
 function discord_right_sync_get_setting_group_id()
 {
     global $db, $mybb;
