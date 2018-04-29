@@ -71,7 +71,7 @@ function discord_right_sync_info()
         "website" => "https://github.com/opt-natter/discord-mybb-sync",
         "author" => "natter",
         "authorsite" => "https://www.opt-community.de/Forum/user-20.html",
-        "version" => "0.6.1",
+        "version" => "0.6.2",
         "guid" => "",
         "codename" => "",
         "compatibility" => "16*,18*"
@@ -317,16 +317,24 @@ function discord_right_sync_settings_update()
         $setting_array = array();
         foreach($usergroups as $usergroup)
             {
-            if (!$usergroup['isbannedgroup'] AND !isset($mybb->settings['drs_setting_gid' . (int)$usergroup['gid']]))
-                {
-                $setting_array['drs_setting_gid' . (int)$usergroup['gid']] = array(
-                    'title' => $db->escape_string($usergroup['title']) ,
-                    'description' => $db->escape_string($usergroup['description']) ,
-                    'optionscode' => 'select\n0=Enter Settings First',
-                    'value' => (int)0,
-                    'disporder' => (int)$disporder++
-                );
-                }
+            if (!$usergroup['isbannedgroup']) 
+				{
+					if (!isset($mybb->settings['drs_setting_gid' . (int)$usergroup['gid']]))
+					{
+					$setting_array['drs_setting_gid' . (int)$usergroup['gid']] = array(
+						'title' => $db->escape_string($usergroup['title']) ,
+						'description' => $db->escape_string($usergroup['description']) ,
+						'optionscode' => 'select\n0=Enter Settings First',
+						'value' => (int)0,
+						'disporder' => (int)$disporder++
+					);
+					}else{ //update title			
+					$db->update_query("settings", array(
+						'title' => $db->escape_string($usergroup['title']),
+						'description' =>  $db->escape_string($usergroup['description'])		
+					) , "name LIKE 'drs_setting_gid".(int)$usergroup['gid']."' AND gid='" . (int)$mybb->input['gid'] . "'");
+					}
+				}
             }
         foreach($setting_array as $name => $setting)
             {
