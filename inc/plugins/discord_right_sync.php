@@ -418,7 +418,7 @@ function discord_right_sync_roles($task = NULL)
         SELECT `uid`,`usergroup`,`additionalgroups`,`fid" . (int)$mybb->settings['drs_setting_user_fid'] . "`
         FROM `" . TABLE_PREFIX . "users` AS u
         INNER JOIN `" . TABLE_PREFIX . "userfields` AS uf ON (u.`uid`=uf.`ufid`)
-        WHERE uf.`fid" . (int)$mybb->settings['drs_setting_user_fid'] . "` IS NOT NULL");
+        WHERE uf.`fid" . (int)$mybb->settings['drs_setting_user_fid'] . "` <> ''");
     while ($user = $db->fetch_array($query))
     {
         //join all user usergroups
