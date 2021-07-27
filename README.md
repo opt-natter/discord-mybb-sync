@@ -9,10 +9,14 @@ https://github.com/Mashape/unirest-php
 4. Create a Bot User and copy the Client ID from the App details and Token from the App Bot User
 5. Visit: https://discordapi.com/permissions.html#268435456. insert your Client ID and visit the Link
 6. Add the Bot to your Server
-7. copy your Guild ID (https://support.discordapp.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-)
-8. Open your Admin-CP and install this plugin (Configuration -> Plugins)
-9. Open the Settings Tab in the Admin-CP (Configuration -> Settings -> Discord Right Sync Settings) and enter your Bot Token and Guild ID
-10. Open the Settings Tab and configure your groups
+7. Go to https://discordapp.com/developers/applications/me#top
+8. Select the app for the sync
+9. Select the "Bot" menu
+10. Scroll down to "SERVER MEMBERS INTENT" and enable that option
+11. copy your Guild ID (https://support.discordapp.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-)
+12. Open your Admin-CP and install this plugin (Configuration -> Plugins)
+13. Open the Settings Tab in the Admin-CP (Configuration -> Settings -> Discord Right Sync Settings) and enter your Bot Token and Guild ID
+14. Open the Settings Tab and configure your groups
 
 Description:
 This bot assings Discord Roles to user which are in mybb groups. The update task runs ervery 5 minutes and comares the discoard roles with the mybb usergroups. 
