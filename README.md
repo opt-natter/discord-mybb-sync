@@ -16,7 +16,13 @@ https://github.com/Mashape/unirest-php
 11. copy your Guild ID (https://support.discordapp.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-)
 12. Open your Admin-CP and install this plugin (Configuration -> Plugins)
 13. Open the Settings Tab in the Admin-CP (Configuration -> Settings -> Discord Right Sync Settings) and enter your Bot Token and Guild ID
-14. Open the Settings Tab and configure your groups
+14. For the syncronisation with Discord the user needs to be able to add his Discord Name to the mybb Profile.
+    Add a custom "Discord ID" Profiel Field (Configuration -> Custom Profile Fields).
+15. Re-Open the Settings Tab. You should now be able to see all the mybb usergoups and can assign the corresponding discrod role to it. If a group does not have a discord role just set it to "none".
+
+What each user needs to do:
+Open Discord and find your Discord-Name. The Name should lool like: YouUserName#Numer e.g. TestUser#1234
+Open your Profile Page in mybb and paste your Name in the corresponding field.
 
 Description:
 This bot assings Discord Roles to user which are in mybb groups. The update task runs ervery 5 minutes and compares the discoard roles with the mybb usergroups. 
