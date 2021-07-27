@@ -19,7 +19,7 @@ https://github.com/Mashape/unirest-php
 14. Open the Settings Tab and configure your groups
 
 Description:
-This bot assings Discord Roles to user which are in mybb groups. The update task runs ervery 5 minutes and comares the discoard roles with the mybb usergroups. 
+This bot assings Discord Roles to user which are in mybb groups. The update task runs ervery 5 minutes and compares the discoard roles with the mybb usergroups. 
 Due to an limited amount of request from the discord api, usually only 10 users are updatet per plugin task run. The remaining ones are processed in the next task run. 
 
 If a user has not an role, but is in the corresponding mybb goup, the role is assinged to the user
