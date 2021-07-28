@@ -16,14 +16,13 @@ function task_discord_right_sync($task)
     require_once MYBB_ROOT . 'inc/plugins/discord_right_sync.php';
 
     global $mybb, $db, $lang;
+	discord_right_sync_add_task_log($task, 'DEBUG: task_discord_right_sync was called', 'TASK discord_right_sync.php line '. __LINE__,2);
     if (discord_right_sync_roles($task))
         {
-
-        // add_task_log($task, 'All roles synced');
-
+			discord_right_sync_add_task_log($task, 'INFO: All roles synced', 'TASK discord_right_sync.php line '. __LINE__,1);
         }
       else
         {
-        add_task_log($task, 'Not all roles synced. Discord API limit reached.');
+			discord_right_sync_add_task_log($task, 'discord_right_sync returned false', 'TASK discord_right_sync.php line '. __LINE__,0);
         }
     }

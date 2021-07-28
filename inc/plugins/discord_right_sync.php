@@ -71,13 +71,12 @@ function discord_right_sync_info()
         "website" => "https://github.com/opt-natter/discord-mybb-sync",
         "author" => "natter",
         "authorsite" => "https://www.opt-community.de/Forum/user-20.html",
-        "version" => "0.6.2",
+        "version" => "0.7.1",
         "guid" => "",
         "codename" => "",
         "compatibility" => "16*,18*"
     );
 }
-
 function discord_right_sync_install()
 {
     global $db, $mybb, $cache;
@@ -122,6 +121,13 @@ function discord_right_sync_install()
         'value' => (int)1,
         'disporder' => (int)$disporder++
     );    
+    $setting_array['drs_setting_ratelimit_loglevel'] = array(
+        'title' => 'Task Log Level',
+        'description' => 'Adjust the error log level',
+        'optionscode' => "select\n0=error\n1=information\n2=debug",
+        'value' => (int)0,
+        'disporder' => (int)$disporder++
+    );
     $setting_array['drs_setting_ratelimit_reset'] = array(
         'title' => 'Do Not Change',
         'description' => 'Epoch time at which the rate limit resets',
@@ -200,7 +206,7 @@ function discord_right_sync_activate()
         $cache->update_tasks();
         }
         
-    //update from 5.1
+    //update from 0.5.1
     if(!isset($mybb->settings['drs_setting_del_id'])){
         $setting_array['drs_setting_del_id'] = array(
             'title' => 'Delete invalid Discord ID',
@@ -214,8 +220,25 @@ function discord_right_sync_activate()
             $setting['name'] = $db->escape_string($name);
             $setting['gid'] = $db->escape_string($gid);
             $db->insert_query('settings', $setting);
-        }  
-        
+        }      
+        rebuild_settings();      
+    }   
+	
+    //update from 0.7.0
+    if(!isset($mybb->settings['drs_setting_ratelimit_loglevel'])){
+		$setting_array['drs_setting_ratelimit_loglevel'] = array(
+			'title' => 'Task Log Level',
+			'description' => 'Adjust the error log level',
+			'optionscode' => "select\n0=error\n1=information\n2=debug",
+			'value' => (int)0,
+			'disporder' => (int)6
+		);
+        $gid=discord_right_sync_get_setting_group_id();
+        foreach($setting_array as $name => $setting){
+            $setting['name'] = $db->escape_string($name);
+            $setting['gid'] = $db->escape_string($gid);
+            $db->insert_query('settings', $setting);
+        }      
         rebuild_settings();      
     }   
 }
@@ -228,6 +251,27 @@ function discord_right_sync_deactivate()
         'enabled' => 0
     ) , 'file = \'discord_right_sync\'');
 }
+
+//custom tasklog
+//level 0 = error
+//level 1 = information
+//level 2 = debug
+function discord_right_sync_add_task_log($task, $message, $position, $log_level)
+{    
+    global $mybb;
+
+	if(!isset($mybb->settings['drs_setting_ratelimit_loglevel']))
+		$mybb->settings['drs_setting_ratelimit_loglevel'] = 0;
+	
+	if($mybb->settings['drs_setting_ratelimit_loglevel']>=$log_level)
+	{
+		if($log_level == 0)
+			add_task_log($task, $message);
+		else if($log_level >= 1)
+			add_task_log($task, $position . " " . $message);
+	}
+}
+
 
 function discord_right_sync_get_setting_group_id()
 {
@@ -408,9 +452,12 @@ function discord_right_sync_roles($task = NULL)
     global $mybb, $db, $cache;
     require_once UNIREST;
     require_once MYBB_ROOT . '/inc/functions_task.php';
-    
-    if ($mybb->settings['drs_setting_ratelimit_reset'] > time()) 
+ 
+ if ($mybb->settings['drs_setting_ratelimit_reset'] > time()) 
+	{
+		discord_right_sync_add_task_log($task, 'DEBUG: waiting till api limit is expired', 'discord_right_sync.php line '. __LINE__,2);
         return; //wait with new reqeust till the api rate limit resets
+	}
    
     $user_roles = array();
     //get all mybb users with discord name field
@@ -430,11 +477,11 @@ function discord_right_sync_roles($task = NULL)
         $usergroups = array_diff($usergroups, array('') , array(' ')); //remove all empty elements
         
         
-        $user_d_name = trim($user['fid' . $mybb->settings['drs_setting_user_fid']]);;
+        $user_d_name = trim($user['fid' . $mybb->settings['drs_setting_user_fid']]);
         if (isset($user_roles[$user_d_name])) //same Discord Name in multiple accounts => ignore accounts.
         {
             $user_roles[$user_d_name] = - 1;
-            add_task_log($task, 'ERROR: Duplicated Discord Name: '.htmlspecialchars($user_d_name));
+            discord_right_sync_add_task_log($task, 'WARNING: Duplicated Discord Name: '.htmlspecialchars($user_d_name), 'discord_right_sync.php line '. __LINE__,1);
             continue;
         }   
             
@@ -446,7 +493,7 @@ function discord_right_sync_roles($task = NULL)
                 {
                     //delete user field content
                      $db->update_query('userfields', array("fid".(int)$mybb->settings['drs_setting_user_fid'] => "NULL"), '`ufid` = ' . (int)$user['uid'],"",true);  
-                      add_task_log($task, 'ERROR: Invalid Discord Name: '.htmlspecialchars($user_d_name).' (deleted)');      
+                      discord_right_sync_add_task_log($task, 'ERROR: Invalid Discord Name: '.htmlspecialchars($user_d_name).' (deleted)', 'discord_right_sync.php line '. __LINE__,0);      
                 }
                 continue;
             }
@@ -463,7 +510,10 @@ function discord_right_sync_roles($task = NULL)
     //get all discord members with their roles
     $response = discord_right_sync_get_querry_discord('guilds/' . $mybb->settings['drs_setting_guild_id'] . '/members?limit=1000');
     if($response->code != 200)
+	{
+		discord_right_sync_add_task_log($task, 'DEBUG: Could not get discord Members with their roles HTTP:'.(int)$response->code, 'discord_right_sync.php line '. __LINE__,2);
         return false;
+	}
         
     foreach($response->body as $d_user_obj)
     {
@@ -475,7 +525,7 @@ function discord_right_sync_roles($task = NULL)
     }
     unset($response);
     
-    
+    discord_right_sync_add_task_log($task, 'DEBUG: Checking groups', 'discord_right_sync.php line '. __LINE__,2);
     $controlled_groups = array(); //controlled groups by mybb
     // Read the usergroups cache
     $usergroups = $cache->read("usergroups");
@@ -520,6 +570,8 @@ function discord_right_sync_roles($task = NULL)
         //check if roles have changed
         if (!empty($add_role) OR !empty($remove_role))
         {
+		discord_right_sync_add_task_log($task, 'INFO: sth has changed', 'discord_right_sync.php line '. __LINE__,2);
+		
             if (!empty($add_role)) 
                 $complete_roles = array_merge($complete_roles, $add_role);
                 
@@ -530,19 +582,34 @@ function discord_right_sync_roles($task = NULL)
             $complete_roles = array_values($complete_roles);
             
             //patch discord roles
-            $response = discord_right_sync_patch_querry_discord('guilds/' . $mybb->settings['drs_setting_guild_id'] . '/members/' . $data['d_id'],$complete_roles);
-            if ($response->code == 204)
+            $response = discord_right_sync_patch_querry_discord('guilds/' . htmlspecialchars($mybb->settings['drs_setting_guild_id']) . '/members/' . htmlspecialchars($data['d_id']),$complete_roles);
+            discord_right_sync_add_task_log($task, 'DEBUG: Update guilds/' . htmlspecialchars($mybb->settings['drs_setting_guild_id']) . '/members/' . htmlspecialchars($data['d_id']). ' HTTP-Response:'. (int)$response->code , 'discord_right_sync.php line '. __LINE__,2);
+			
+			foreach($response->headers as $key => $value) //Loop trough the headers and convert all to lowecase
             {
-                // success
+                unset($response->headers[$key]);
+                $response->headers[strtolower($key)] = $value; //make the response case insensitive
             }
-            if (isset($response->headers['X-RateLimit-Reset'])) //update reset time
+            if ($response->code == 204) //No Content 
+            {
+				discord_right_sync_add_task_log($task, 'DEBUG: sucessfull updated '. htmlspecialchars($user_d_name), 'discord_right_sync.php line '. __LINE__,2);
+                // success
+            }else{
+				discord_right_sync_add_task_log($task,'DEBUG: for '. htmlspecialchars($user_d_name), 'discord_right_sync.php line '. __LINE__,2);
+				foreach($response->headers as $key => $value)
+				{
+					discord_right_sync_add_task_log($task,'DEBUG: '.htmlspecialchars($key) .'=>'.htmlspecialchars($value), 'discord_right_sync.php line '. __LINE__,2);
+				}
+			}
+            if (isset($response->headers['x-ratelimit-reset'])) //update reset time
             {
                 $db->update_query("settings", array(
-                    'value' => (int)$response->headers['X-RateLimit-Reset']
+                    'value' => (int)$response->headers['x-ratelimit-reset']
                 ) , "name = 'drs_setting_ratelimit_reset'");
             }
-            if ($response->headers['X-RateLimit-Remaining'] == 0) //no more Querries allowed
+            if ($response->headers['x-ratelimit-remaining'] == 0) //no more Querries allowed
             {
+				discord_right_sync_add_task_log($task, 'INFO: Discord RateLimit was reached', 'discord_right_sync.php line '. __LINE__,1);
                 return false;
             }
         }
