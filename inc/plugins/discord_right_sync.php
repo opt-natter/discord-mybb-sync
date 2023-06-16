@@ -61,7 +61,8 @@ if (defined('IN_ADMINCP')) {
     $plugins->add_hook("admin_user_groups_delete_commit", "discord_right_sync_del_group"); //remove group from plugin settings if the group is deleted 
 }
 $plugins->add_hook("usercp_do_profile_end", "discord_right_sync_user_profile"); //provide a check for die right discord id format
-define("DRS_DISCORD_ID_FORMAT", '.{1,32}#\d{4}'); //discord ID Format check NAME#0000
+define("DRS_DISCORD_ID_FORMAT_old", '.{1,32}#\d{4}'); //discord ID Format check NAME#0000
+define("DRS_DISCORD_ID_FORMAT_new", '\d{18}'); //discord ID check
 
 function discord_right_sync_info()
 {
@@ -71,7 +72,7 @@ function discord_right_sync_info()
         "website" => "https://github.com/opt-natter/discord-mybb-sync",
         "author" => "natter",
         "authorsite" => "https://www.opt-community.de/Forum/user-20.html",
-        "version" => "0.7.1",
+        "version" => "0.8.0",
         "guid" => "",
         "codename" => "",
         "compatibility" => "16*,18*"
@@ -304,7 +305,8 @@ function discord_right_sync_user_profile()
     if(empty($mybb->input['profile_fields']['fid' . $mybb->settings['drs_setting_user_fid']]))
        return;
                
-    if(!preg_match('/'.DRS_DISCORD_ID_FORMAT.'$/i',trim($mybb->input['profile_fields']['fid' . $mybb->settings['drs_setting_user_fid']])))
+    if(!preg_match('/'.DRS_DISCORD_ID_FORMAT_old.'$/i',trim($mybb->input['profile_fields']['fid' . $mybb->settings['drs_setting_user_fid']]))
+		OR !preg_match('/'.DRS_DISCORD_ID_FORMAT_new.'$/i',trim($mybb->input['profile_fields']['fid' . $mybb->settings['drs_setting_user_fid']])))
        error('Your Discord ID does is probably wrong. Please check it again.');
 }
 function discord_right_sync_settings_update()
@@ -420,7 +422,7 @@ function discord_right_sync_discord_header()
     global $mybb;
     return array(
         'Authorization' => 'Bot ' . $mybb->settings['drs_setting_token'],
-        'User-Agent' => 'DRS (' . discord_right_sync_info() ['website'] . ',' . discord_right_sync_info() ['version'] . ')'
+        'User-Agent' => 'DiscordBot_DRS (' . discord_right_sync_info() ['website'] . ',' . discord_right_sync_info() ['version'] . ')'
     );
 }
 function discord_right_sync_get_querry_discord($path)
@@ -429,7 +431,7 @@ function discord_right_sync_get_querry_discord($path)
     require_once UNIREST;
     
     $headers = discord_right_sync_discord_header();
-    $response = Unirest\Request::get('https://discordapp.com/api/' . $path, $headers);
+    $response = Unirest\Request::get('https://discord.com/api/v10/' . $path, $headers);
     return $response;
 }
 function discord_right_sync_patch_querry_discord($path,$content)
@@ -443,7 +445,7 @@ function discord_right_sync_patch_querry_discord($path,$content)
     $body = Unirest\Request\Body::json(array(
         'roles' => $content
     ));
-    $response = Unirest\Request::patch('https://discordapp.com/api/' . $path, $headers, $body);
+    $response = Unirest\Request::patch('https://discord.com/api/v10/' . $path, $headers, $body);
     return $response;
 }
        
@@ -476,7 +478,6 @@ function discord_right_sync_roles($task = NULL)
         $usergroups = explode(',', $usergroup_string);
         $usergroups = array_diff($usergroups, array('') , array(' ')); //remove all empty elements
         
-        
         $user_d_name = trim($user['fid' . $mybb->settings['drs_setting_user_fid']]);
         if (isset($user_roles[$user_d_name])) //same Discord Name in multiple accounts => ignore accounts.
         {
@@ -485,8 +486,16 @@ function discord_right_sync_roles($task = NULL)
             continue;
         }   
             
-            //check for correct NAME#0000 format
-            if(!preg_match('/'.DRS_DISCORD_ID_FORMAT.'$/i',$user_d_name))
+			$DRS_DISCORD_ID_FORMAT_old = false;
+			$DRS_DISCORD_ID_FORMAT_new = false;
+			if(preg_match('/'.DRS_DISCORD_ID_FORMAT_old.'$/i',$user_d_name))
+				$DRS_DISCORD_ID_FORMAT_old = true;
+			if(preg_match('/'.DRS_DISCORD_ID_FORMAT_new.'$/i',$user_d_name))
+				$DRS_DISCORD_ID_FORMAT_new = true;	
+
+            //check for correct format
+            if(!$DRS_DISCORD_ID_FORMAT_old
+				AND !$DRS_DISCORD_ID_FORMAT_new)
             {
                 //wrong format
                 if($mybb->settings['drs_setting_del_id'])
@@ -497,7 +506,7 @@ function discord_right_sync_roles($task = NULL)
                 }
                 continue;
             }
-            
+           
         foreach($usergroups as $mybb_gid)
         {
             //add role to user if a discord role is selected for that group
@@ -514,14 +523,18 @@ function discord_right_sync_roles($task = NULL)
 		discord_right_sync_add_task_log($task, 'DEBUG: Could not get discord Members with their roles HTTP:'.(int)$response->code, 'discord_right_sync.php line '. __LINE__,2);
         return false;
 	}
-        
+   
     foreach($response->body as $d_user_obj)
     {
-        $user_d_name = $d_user_obj->user->username . '#' . $d_user_obj->user->discriminator;
-        if ($user_roles[$user_d_name] == - 1) //same Discord Name in multiple accounts => ignore accounts.
-            continue;
-        $user_roles[$user_d_name]['d_roles'] = $d_user_obj->roles;
-        $user_roles[$user_d_name]['d_id'] = $d_user_obj->user->id;
+		if(DRS_DISCORD_ID_FORMAT_old)
+			$user_d_name = $d_user_obj->user->username . '#' . $d_user_obj->user->discriminator;
+		if(DRS_DISCORD_ID_FORMAT_new)
+			$user_d_name = $d_user_obj->user->id;
+		
+		if ($user_roles[$user_d_name] == - 1) //same Discord Name/ID in multiple accounts => ignore accounts.
+			continue;
+		$user_roles[$user_d_name]['d_roles'] = $d_user_obj->roles;
+		$user_roles[$user_d_name]['d_id'] = $d_user_obj->user->id;
     }
     unset($response);
     
@@ -555,10 +568,14 @@ function discord_right_sync_roles($task = NULL)
         $must_have_groups = array(); //roles which are assigned to the user by mybb
         if (!empty($data['mybb_groups'])) 
             $must_have_groups = array_merge($must_have_groups, $data['mybb_groups']);
-            
+		
+        discord_right_sync_add_task_log($task, 'Trace: must_have_groups: '.print_r($must_have_groups,true), 'discord_right_sync.php line '. __LINE__,2);    
+		
         $complete_roles = $data['d_roles'];
         foreach($must_have_groups as $mybb_gid => $d_role_id)
         {
+			discord_right_sync_add_task_log($task, 'Trace: Working...: '.print_r($d_role_id,true), 'discord_right_sync.php line '. __LINE__,2); 
+			discord_right_sync_add_task_log($task, 'Trace: Working...: '.print_r($data['d_roles'],true), 'discord_right_sync.php line '. __LINE__,2); 
             if (!in_array($d_role_id, $data['d_roles'])) 
                 array_push($add_role, $d_role_id);
         }
@@ -598,8 +615,9 @@ function discord_right_sync_roles($task = NULL)
 				discord_right_sync_add_task_log($task,'DEBUG: for '. htmlspecialchars($user_d_name), 'discord_right_sync.php line '. __LINE__,2);
 				foreach($response->headers as $key => $value)
 				{
-					discord_right_sync_add_task_log($task,'DEBUG: '.htmlspecialchars($key) .'=>'.htmlspecialchars($value), 'discord_right_sync.php line '. __LINE__,2);
+					// discord_right_sync_add_task_log($task,'DEBUG: '.htmlspecialchars($key) .'=>'.htmlspecialchars($value), 'discord_right_sync.php line '. __LINE__,2);
 				}
+				discord_right_sync_add_task_log($task,'DEBUG: '. print_r($response,true), 'discord_right_sync.php line '. __LINE__,2);
 			}
             if (isset($response->headers['x-ratelimit-reset'])) //update reset time
             {
@@ -612,7 +630,9 @@ function discord_right_sync_roles($task = NULL)
 				discord_right_sync_add_task_log($task, 'INFO: Discord RateLimit was reached', 'discord_right_sync.php line '. __LINE__,1);
                 return false;
             }
-        }
+        }else{
+			discord_right_sync_add_task_log($task, 'INFO: nothing has changed for '. htmlspecialchars($user_d_name), 'discord_right_sync.php line '. __LINE__,2);
+		}
     }
     return true;
 }
